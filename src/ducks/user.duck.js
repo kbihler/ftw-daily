@@ -307,54 +307,59 @@ export const fetchCurrentUserNotifications = () => (dispatch, getState, sdk) => 
 
 export const fetchCurrentUser = (params = null) => (dispatch, getState, sdk) => {
   dispatch(currentUserShowRequest());
-  const { isAuthenticated } = getState().Auth;
 
-  if (!isAuthenticated) {
-    // Make sure current user is null
-    dispatch(currentUserShowSuccess(null));
-    return Promise.resolve({});
-  }
+  sdk.authInfo().then(info => {
+    const { isAnonymous } = info;
 
-  const parameters = params || {
-    include: ['profileImage', 'stripeAccount'],
-    'fields.image': ['variants.square-small', 'variants.square-small2x'],
-  };
-
-  return sdk.currentUser
-    .show(parameters)
-    .then(response => {
-      const entities = denormalisedResponseEntities(response);
-      if (entities.length !== 1) {
-        throw new Error('Expected a resource in the sdk.currentUser.show response');
-      }
-      const currentUser = entities[0];
-
-      // Save stripeAccount to store.stripe.stripeAccount if it exists
-      if (currentUser.stripeAccount) {
-        dispatch(stripeAccountCreateSuccess(currentUser.stripeAccount));
-      }
-
-      // set current user id to the logger
-      log.setUserId(currentUser.id.uuid);
-      dispatch(currentUserShowSuccess(currentUser));
-      return currentUser;
-    })
-    .then(currentUser => {
-      dispatch(fetchCurrentUserHasListings());
-      dispatch(fetchCurrentUserNotifications());
-      if (!currentUser.attributes.emailVerified) {
-        dispatch(fetchCurrentUserHasOrders());
-      }
-
+    if (isAnonymous) {
+      // Make sure current user is null
+      dispatch(currentUserShowSuccess(null));
       // Make sure auth info is up to date
       dispatch(authInfo());
-    })
-    .catch(e => {
-      // Make sure auth info is up to date
-      dispatch(authInfo());
-      log.error(e, 'fetch-current-user-failed');
-      dispatch(currentUserShowError(storableError(e)));
-    });
+      return Promise.resolve({});
+    }
+
+    const parameters = params || {
+      include: ['profileImage', 'stripeAccount'],
+      'fields.image': ['variants.square-small', 'variants.square-small2x'],
+    };
+
+    return sdk.currentUser
+      .show(parameters)
+      .then(response => {
+        const entities = denormalisedResponseEntities(response);
+        if (entities.length !== 1) {
+          throw new Error('Expected a resource in the sdk.currentUser.show response');
+        }
+        const currentUser = entities[0];
+
+        // Save stripeAccount to store.stripe.stripeAccount if it exists
+        if (currentUser.stripeAccount) {
+          dispatch(stripeAccountCreateSuccess(currentUser.stripeAccount));
+        }
+
+        // set current user id to the logger
+        log.setUserId(currentUser.id.uuid);
+        dispatch(currentUserShowSuccess(currentUser));
+        return currentUser;
+      })
+      .then(currentUser => {
+        dispatch(fetchCurrentUserHasListings());
+        dispatch(fetchCurrentUserNotifications());
+        if (!currentUser.attributes.emailVerified) {
+          dispatch(fetchCurrentUserHasOrders());
+        }
+
+        // Make sure auth info is up to date
+        dispatch(authInfo());
+      })
+      .catch(e => {
+        // Make sure auth info is up to date
+        dispatch(authInfo());
+        log.error(e, 'fetch-current-user-failed');
+        dispatch(currentUserShowError(storableError(e)));
+      });
+  });
 };
 
 export const sendVerificationEmail = () => (dispatch, getState, sdk) => {
